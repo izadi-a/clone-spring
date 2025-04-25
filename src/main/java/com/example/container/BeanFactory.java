@@ -1,9 +1,6 @@
 package com.example.container;
 
-import com.example.annotation.Autowired;
-import com.example.annotation.Component;
-import com.example.annotation.PostConstruct;
-import com.example.annotation.PreDestroy;
+import com.example.annotation.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,7 +9,7 @@ import java.net.URL;
 import java.util.*;
 
 public class BeanFactory {
-    private Map<Class<?>, Object> beans = new HashMap<>();
+    private Map<Class<?>, BeanDefinition> beanDefinitions = new HashMap<>();
 
     public BeanFactory(String basePackage) {
         try {
@@ -21,11 +18,6 @@ public class BeanFactory {
             e.printStackTrace();
             // Handle exception appropriately
         }
-    }
-
-    // Method to register a bean (initially, we might do this manually)
-    public void registerBean(Class<?> beanClass, Object instance) {
-        beans.put(beanClass, instance);
     }
 
     private void scanComponents(String basePackage) throws ClassNotFoundException, IOException, InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
@@ -41,13 +33,19 @@ public class BeanFactory {
             findClasses(directory, basePackage);
         }
         // After all beans are instantiated, inject their dependencies
-        for (Object bean : beans.values()) {
+        for (Object bean : beanDefinitions.values()) {
             injectFields(bean);
         }
-        // After all beans are instantiated and dependencies injected, invoke @PostConstruct
-        for (Object bean : beans.values()) {
-            injectFields(bean); // Inject fields first
-            invokePostConstruct(bean);
+        // After all beans are defined, we can proceed with instantiation and lifecycle
+        for (BeanDefinition beanDefinition : beanDefinitions.values()) {
+            if (beanDefinition.getScope().equals("singleton")) {
+                Object instance = createInstance(beanDefinition.getBeanClass());
+                if (instance != null) {
+                    beanDefinition.setSingletonInstance(instance);
+                    injectFields(instance);
+                    invokePostConstruct(instance);
+                }
+            }
         }
     }
 
@@ -65,11 +63,9 @@ public class BeanFactory {
                     String className = packageName + '.' + file.getName().substring(0, file.getName().length() - 6);
                     Class<?> clazz = Class.forName((className));
                     if (clazz.isAnnotationPresent(Component.class)) {
-                        Object instance = createInstance(clazz);
-                        if (instance != null) {
-                            beans.put(clazz, instance);
-                            System.out.println("Registered bean: " + clazz.getName());
-                        }
+                        String scope = clazz.getAnnotation(Component.class).scope();
+                        beanDefinitions.put(clazz, new BeanDefinition(clazz, scope));
+                        System.out.println("Registered bean definition: " + clazz.getName() + " with scope: " + scope);
                     }
                 }
             }
@@ -107,7 +103,7 @@ public class BeanFactory {
         }
     }
 
-    private void injectFields(Object bean) throws IllegalAccessException {
+    private void injectFields(Object bean) throws IllegalAccessException, InvocationTargetException, NoSuchMethodException, InstantiationException {
         Class<?> clazz = bean.getClass();
         for (Field field : clazz.getDeclaredFields()) {
             if (field.isAnnotationPresent(Autowired.class)) {
@@ -146,7 +142,7 @@ public class BeanFactory {
     public void shutdown() {
         System.out.println("Shutting down BeanContainer...");
         // Iterate through beans and invoke @PreDestroy methods
-        for (Object bean : beans.values()) {
+        for (BeanDefinition bean : beanDefinitions.values()) {
             Class<?> clazz = bean.getClass();
             for (Method method : clazz.getDeclaredMethods()) {
                 if (method.isAnnotationPresent(PreDestroy.class)) {
@@ -160,12 +156,37 @@ public class BeanFactory {
                 }
             }
         }
-        beans.clear(); // Clean up the bean map
+        beanDefinitions.clear(); // Clean up the bean map
         System.out.println("BeanContainer shut down.");
     }
 
     // Method to retrieve a bean
-    public <T> T getBean(Class<T> beanType) {
-        return (T) beans.get(beanType);
+    public <T> T getBean(Class<T> beanType) throws InvocationTargetException, NoSuchMethodException, InstantiationException, IllegalAccessException {
+        BeanDefinition beanDefinition = beanDefinitions.get(beanType);
+        if (beanDefinition == null) {
+            throw new NoSuchBeanDefinitionException("No bean found for type: " + beanType.getName());
+        }
+        if (beanDefinition.getScope().equals("singleton")) {
+            if (beanDefinition.getSingletonInstance() == null) {
+                Object instance = createInstance(beanDefinition.getBeanClass());
+                beanDefinition.setSingletonInstance(instance);
+                injectFields(instance);
+                invokePostConstruct(instance);
+            }
+            return (T) beanDefinition.getSingletonInstance();
+        } else if (beanDefinition.getScope().equals("prototype")) {
+            Object instance = createInstance(beanDefinition.getBeanClass());
+            injectFields(instance);
+            invokePostConstruct(instance);
+            return (T) instance;
+        } else {
+            throw new UnsupportedOperationException("Unsupported bean scope: " + beanDefinition.getScope());
+        }
+    }
+
+    class NoSuchBeanDefinitionException extends RuntimeException {
+        public NoSuchBeanDefinitionException(String message) {
+            super(message);
+        }
     }
 }

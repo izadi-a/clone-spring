@@ -7,6 +7,6 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface Component {
-    String scope() default "singleton"; // Default scope is singleton
+public @interface Scope {
+    String value() default "singleton"; // Default scope is singleton
 }

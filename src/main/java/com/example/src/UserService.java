@@ -1,11 +1,9 @@
 package com.example.src;
 
-import com.example.annotation.Autowired;
-import com.example.annotation.Component;
-import com.example.annotation.PostConstruct;
-import com.example.annotation.PreDestroy;
+import com.example.annotation.*;
 
 @Component
+@Scope("prototype")
 public class UserService {
     private final UserRepositoryImpl userRepositoryImpl;
     private final LoggerService loggerService;
