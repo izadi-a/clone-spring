@@ -1,4 +1,4 @@
-package com.example.annotation;
+package com.example.annotation.aop;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -7,7 +7,6 @@ import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface Service {
-    // You could add a name attribute here if you want to identify beans by a specific name.
-    String value() default "";
+public @interface Aspect {
+    // No attributes needed for now
 }

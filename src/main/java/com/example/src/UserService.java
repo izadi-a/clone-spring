@@ -4,7 +4,8 @@ import com.example.annotation.*;
 
 @Component
 @Scope("prototype")
-public class UserService {
+@Service
+public class UserService implements UserServiceInterface {
     private final UserRepositoryImpl userRepositoryImpl;
     private final LoggerService loggerService;
 
